@@ -22,6 +22,8 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+var AppVersion = "0.0.1"
+
 type ApiKeyResponse struct {
 	ApiKey string `json:"key"`
 }

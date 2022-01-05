@@ -50,7 +50,7 @@ func (app *AgoraApp) Start(s service.Service) error {
 	return nil
 }
 func (app *AgoraApp) run() error {
-	conf, err := config.GetConf(app.Config)
+	conf, err := config.GetConf(app.Config, true)
 	if err != nil {
 		logrus.Fatal("Cannot read the config file: ", err)
 	}
@@ -65,7 +65,7 @@ func (app *AgoraApp) run() error {
 	connected := true
 
 	logrus.Info("Running and connected to Agora:")
-	logrus.Info("    Version      : ", conf.General.Version)
+	logrus.Info("    Version      : ", agora.AppVersion)
 	logrus.Info("    Agora URL    : ", conf.Agora.Url)
 	logrus.Info("    Download path: ", conf.General.BasePath)
 	logrus.Info("    UID          : ", conf.General.Uid)

@@ -51,7 +51,7 @@ func setupOSServiceConfig(c *cli.Context, config *service.Config) {
 func runServiceInstall(s service.Service, c *cli.Context) error {
 	// create the config file if it doesn't exist
 	if config_file := c.String("config"); config_file != "" {
-		_, err := config.GetConf(config_file)
+		_, err := config.GetConf(config_file, false)
 		if err != nil {
 			logrus.Fatal("Cannot read the config file")
 		}

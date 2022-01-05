@@ -61,7 +61,7 @@ func credentials() (string, string, error) {
 }
 
 func run(download_path string, agora_url string, user string, password string, config_file string) config.Configurations {
-	c, err := config.GetConf(config_file)
+	c, err := config.GetConf(config_file, false)
 	if err != nil {
 		logrus.Fatal("Cannot read the config file")
 	}

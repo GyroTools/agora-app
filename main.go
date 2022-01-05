@@ -5,18 +5,22 @@ import (
 	"os"
 	"sort"
 
+	"agora-app/agora"
 	"agora-app/commands"
 
 	"github.com/urfave/cli/v2"
 )
 
+var appVersion = "3.0.0"
+
 func main() {
 	commands.Init()
 
+	agora.AppVersion = appVersion
 	app := &cli.App{}
 	app.Name = "agora-app"
 	app.Usage = "for downloading files from Agora and executing local tasks"
-	app.Version = "1.0.0"
+	app.Version = appVersion
 	app.Authors = []*cli.Author{
 		{
 			Name:  "Martin Buehrer",

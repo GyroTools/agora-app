@@ -120,7 +120,7 @@ func NewPingMessage(conf config.Configurations) PingMessage {
 		system = "windows"
 	}
 
-	version := conf.General.Version
+	version := AppVersion
 	if version == "" {
 		version = "0.0.1"
 	}

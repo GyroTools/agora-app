@@ -25,14 +25,11 @@ type AgoraConfigurations struct {
 type GeneralConfigurations struct {
 	Uid                 string `yaml:"uid"`
 	BasePath            string `yaml:"base-path"`
-	Version             string `yaml:"version"`
 	NrParallelDownloads int    `yaml:"nr-parallel-downloads"`
 }
 
 func NewConfig() Configurations {
 	var c Configurations
-	// TODO version management
-	c.General.Version = "2.9.3"
 	uuid, _ := uuid.NewV4()
 	c.General.Uid = uuid.String()
 
@@ -49,10 +46,14 @@ func GetDefaultConfigFile() string {
 	return filename
 }
 
-func GetConf(config_file string) (Configurations, error) {
+func GetConf(config_file string, raise bool) (Configurations, error) {
 	c := NewConfig()
 	if _, err := os.Stat(config_file); errors.Is(err, os.ErrNotExist) {
-		WriteConf(c, config_file)
+		if raise {
+			logrus.Fatal("No config file found. Please run \"agora-app register\" first")
+		} else {
+			WriteConf(c, config_file)
+		}
 	}
 
 	yamlFile, err := ioutil.ReadFile(config_file)
