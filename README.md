@@ -14,7 +14,7 @@ Agora helper app to download data and execute local tasks
    During the registering process you have to enter the download path, Agora URL and credentials. 
 5. Install the agora-app as a service and start it. You can either run the service using the Built-in System Account (recommended) or using a user account.
 
-Run service using Built-in System Account (under directory created in step 1. from above, ex.: C:\agora-app)
+    Run service using Built-in System Account (under directory created in step 1. from above, ex.: C:\agora-app)
 
     ```
     cd C:\agora-app
@@ -22,8 +22,8 @@ Run service using Built-in System Account (under directory created in step 1. fr
     .\agora-app.exe start
     ```
 
-Run service using user account (under directory created in step 1. from above, ex.: C:\agora-app)
-You have to enter a valid password for the current user account, because it’s required to start the service by Windows:
+    Run service using user account (under directory created in step 1. from above, ex.: C:\agora-app)
+    You have to enter a valid password for the current user account, because it’s required to start the service by Windows:
 
     ```
     cd C:\agora-app
