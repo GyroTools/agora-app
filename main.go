@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"sort"
@@ -12,8 +13,16 @@ import (
 )
 
 var appVersion = "3.0.0"
+var buildTime = "N.A."
+var gitCommit = "N.A."
+var gitRef = "N.A."
 
 func main() {
+	cli.VersionPrinter = func(c *cli.Context) {
+		fmt.Printf("%s version %s\n", c.App.Name, c.App.Version)
+		fmt.Printf("build time: %s, git commit: %s, git ref: %s\n", buildTime, gitCommit, gitRef)
+	}
+
 	commands.Init()
 
 	agora.AppVersion = appVersion
