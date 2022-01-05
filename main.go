@@ -20,7 +20,9 @@ var gitRef = "N.A."
 func main() {
 	cli.VersionPrinter = func(c *cli.Context) {
 		fmt.Printf("%s version %s\n", c.App.Name, c.App.Version)
-		fmt.Printf("build time: %s, git commit: %s, git ref: %s\n", buildTime, gitCommit, gitRef)
+		fmt.Printf("\nbuild time: %s\n", buildTime)
+		fmt.Printf("git commit: %s\n", gitCommit)
+		fmt.Printf("git ref: %s\n", gitRef)
 	}
 
 	commands.Init()
