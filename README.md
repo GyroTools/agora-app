@@ -6,7 +6,7 @@ Agora helper app to download data and execute local tasks
 ### Windows
 1. Create a folder somewhere in your system, ex.: C:\agora-app.
 2. Download the binary and put it into the folder you created. The following assumes that the binary is called agora-app.exe
-3. Run an [elevated command prompt] (https://docs.microsoft.com/en-us/powershell/scripting/windows-powershell/starting-windows-powershell?view=powershell-7#with-administrative-privileges-run-as-administrator)
+3. Run an [elevated command prompt](https://docs.microsoft.com/en-us/powershell/scripting/windows-powershell/starting-windows-powershell?view=powershell-7#with-administrative-privileges-run-as-administrator)
 4. Register the agora-app:
     ```
     .\agora-app register
