@@ -3,7 +3,9 @@ package agora
 import (
 	"agora-app/config"
 	"bytes"
+	"crypto/sha1"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,6 +24,17 @@ import (
 
 type ApiKeyResponse struct {
 	ApiKey string `json:"key"`
+}
+
+type CopyFile struct {
+	SourcePath string
+	TargetPath string
+	Filename   string
+}
+
+type CopyData struct {
+	Files     []CopyFile `json:"files"`
+	RequestId string     `json:"requestId"`
 }
 
 type DownloadFile struct {
@@ -183,7 +196,10 @@ func sendProgress(done chan bool, progress DownloadProgress, ws *websocket.Conn,
 				transferred_bytes += size
 				file.Close()
 			}
-			var percent float32 = float32(transferred_bytes) / float32(progress.TotalSize) * 100
+			var percent float32 = 0.0
+			if progress.TotalSize > 0 {
+				percent = float32(transferred_bytes) / float32(progress.TotalSize) * 100
+			}
 			if percent != last_value {
 				WsSendDownloadProgress(ws, percent, request_id)
 				fmt.Printf("%.0f", percent)
@@ -196,6 +212,22 @@ func sendProgress(done chan bool, progress DownloadProgress, ws *websocket.Conn,
 		}
 		time.Sleep(2 * time.Second)
 	}
+}
+
+func getFileHash(filename string) string {
+	hasher := sha1.New()
+	f, err := os.Open(filename)
+	if err != nil {
+		logrus.Error("cannot create file hash: ", err)
+		return ""
+	}
+	defer f.Close()
+	if _, err := io.Copy(hasher, f); err != nil {
+		logrus.Error("cannot create file hash: ", err)
+		return ""
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 func downloadFile(agora_url string, api_key string, file DownloadFile) error {
@@ -291,6 +323,101 @@ func downloadFiles(data DownloadData, conf config.Configurations, ws *websocket.
 	progressCh <- true
 }
 
+func copyFile(src string, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		return err
+	}
+	return out.Close()
+}
+
+func copyFiles(data CopyData, conf config.Configurations) {
+	for _, file := range data.Files {
+		src := filepath.Join(file.SourcePath, file.Filename)
+		dst := filepath.Join(file.TargetPath, file.Filename)
+		err := copyFile(src, dst)
+		if err != nil {
+			logrus.Errorf("Cannot copy file %s to %s", src, dst)
+		}
+	}
+}
+
+func findSameHash(files []DownloadFile, index int) []int {
+	var duplicates []int
+	hash := files[index].Hash
+	for i := range files {
+		if i == index {
+			continue
+		}
+		if files[i].Hash == hash {
+			duplicates = append(duplicates, i)
+		}
+	}
+	return duplicates
+}
+
+func contains(s []int, e int) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
+}
+
+func getDuplicates(data DownloadData) (dd DownloadData, cd CopyData) {
+	dd.RequestId = data.RequestId
+	cd.RequestId = data.RequestId
+	var duplicates []int
+	for i := range data.Files {
+		if contains(duplicates, i) {
+			continue
+		}
+		dd.Files = append(dd.Files, data.Files[i])
+		indices := findSameHash(data.Files, i)
+		if len(indices) > 0 {
+			duplicates = append(duplicates, indices...)
+			for _, index := range indices {
+				cd.Files = append(cd.Files, CopyFile{SourcePath: data.Files[i].TargetPath, TargetPath: data.Files[index].TargetPath, Filename: data.Files[index].Filename})
+			}
+		}
+	}
+
+	return dd, cd
+}
+
+func skipFiles(data DownloadData) (dd DownloadData) {
+	dd.RequestId = data.RequestId
+	for _, file := range data.Files {
+		filename := filepath.Join(file.TargetPath, file.Filename)
+		if _, err := os.Stat(filename); !os.IsNotExist(err) {
+			hash := getFileHash(filename)
+			if hash == file.Hash {
+				continue
+			} else {
+				e := os.Remove(filename)
+				if e != nil {
+					logrus.Error("Error cannot delete the file: ", filename)
+				}
+			}
+		}
+		dd.Files = append(dd.Files, file)
+	}
+	return dd
+}
+
 func ProcessDownload(data WsMessage, conf config.Configurations, ws *websocket.Conn) {
 	download_data_map := data.Data.Data
 	var download_data_raw DownloadDataRaw
@@ -308,5 +435,12 @@ func ProcessDownload(data WsMessage, conf config.Configurations, ws *websocket.C
 		Files:     download_files,
 		RequestId: download_data_raw.RequestId,
 	}
+
+	// do not re-download files if they already exist and the hash is the same
+	download_data = skipFiles(download_data)
+	// do not re-download identical files. Just download one and then copy it to the target destination(s)
+	download_data, copy_data := getDuplicates(download_data)
+
 	downloadFiles(download_data, conf, ws)
+	copyFiles(copy_data, conf)
 }

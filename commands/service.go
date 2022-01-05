@@ -3,11 +3,11 @@ package commands
 import (
 	"agora-app/config"
 	"fmt"
-	"log"
 	"os"
 	"runtime"
 
 	"github.com/kardianos/service"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -49,26 +49,14 @@ func setupOSServiceConfig(c *cli.Context, config *service.Config) {
 }
 
 func runServiceInstall(s service.Service, c *cli.Context) error {
-	// if user := c.String("user"); user == "" && os.Getuid() == 0 {
-	// 	log.Fatal("Please specify user that will run gitlab-runner service")
-	// }
+	// create the config file if it doesn't exist
+	if config_file := c.String("config"); config_file != "" {
+		_, err := config.GetConf(config_file)
+		if err != nil {
+			logrus.Fatal("Cannot read the config file")
+		}
+	}
 
-	// if configFile := c.String("config"); configFile != "" {
-	// 	// try to load existing config
-	// 	config := common.NewConfig()
-	// 	err := config.LoadConfig(configFile)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-
-	// 	// save config for the first time
-	// 	if !config.Loaded {
-	// 		err = config.SaveConfig(configFile)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 	}
-	// }
 	return service.Control(s, "install")
 }
 
@@ -141,12 +129,12 @@ func RunServiceControl(c *cli.Context) error {
 
 	s, err := service.New(&NullService{}, svcConfig)
 	if err == service.ErrNoServiceSystemDetected {
-		log.Fatal("No service system detected. Some features may not work!")
+		logrus.Fatal("No service system detected. Some features may not work!")
 		os.Exit(1)
 	}
 
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 		return err
 	}
 
@@ -160,7 +148,7 @@ func RunServiceControl(c *cli.Context) error {
 	}
 
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 		return err
 	}
 	return nil

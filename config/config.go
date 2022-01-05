@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 
 	uuid "github.com/nu7hatch/gouuid"
 	"github.com/sirupsen/logrus"
@@ -40,7 +41,12 @@ func NewConfig() Configurations {
 }
 
 func GetDefaultConfigFile() string {
-	return "./config.yml"
+	user_home, err := os.UserHomeDir()
+	if err != nil {
+		logrus.Fatal("Error cannot get the home directory: ", err)
+	}
+	filename := filepath.Join(user_home, ".gyrotools", "agora-app", "config.yml")
+	return filename
 }
 
 func GetConf(config_file string) (Configurations, error) {
@@ -64,6 +70,16 @@ func GetConf(config_file string) (Configurations, error) {
 }
 
 func WriteConf(c Configurations, config_file string) (err error) {
+	parent := filepath.Dir(config_file)
+	// create directories
+	if _, err := os.Stat(parent); os.IsNotExist(err) {
+		err = os.MkdirAll(parent, os.ModePerm)
+		if err != nil {
+			logrus.Error("Error cannot create the directory: ", parent)
+			return err
+		}
+	}
+
 	file, err := os.OpenFile(config_file, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		logrus.Errorf("Error opening/creating the config file %s: ", config_file, err)
