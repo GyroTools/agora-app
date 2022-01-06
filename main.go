@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sort"
 
 	"agora-app/agora"
 	"agora-app/commands"
+	"agora-app/log"
 
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -42,8 +43,10 @@ func main() {
 
 	sort.Sort(cli.CommandsByName(app.Commands))
 
+	log.ConfigureLogging(app)
+
 	err := app.Run(os.Args)
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 	}
 }
