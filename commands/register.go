@@ -152,6 +152,8 @@ func init() {
 		Action: func(c *cli.Context) error {
 			conf := run(c.String("download-path"), c.String("url"), c.String("user"), c.String("password"), c.String("config"))
 			config.WriteConf(conf, c.String("config"))
+			config.SetPermissions(c.String("config"))
+			fmt.Println("Config file written to: ", c.String("config"))
 			os.Exit(0)
 			return nil
 		},

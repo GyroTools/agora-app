@@ -108,3 +108,15 @@ func WriteConf(c Configurations, config_file string) (err error) {
 
 	return nil
 }
+
+func SetPermissions(config_file string) (err error) {
+	// change file permissions
+	if (runtime.GOOS == osTypeLinux || runtime.GOOS == osTypeDarwin) && os.Getuid() == 0 {
+		err := os.Chmod(config_file, 0644)
+		if err != nil {
+			logrus.Error("Cannot change permissions for the config file: ", config_file)
+		}
+		return err
+	}
+	return nil
+}
