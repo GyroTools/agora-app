@@ -1,6 +1,9 @@
 # agora-app
 Agora helper app to download data and execute local tasks
 
+## Download
+The agora-app can be downloaded from the [GyroTools Github](https://github.com/GyroTools/agora-app/releases). Please make sure you choose the correct platform.
+
 ## Installation
 
 ### Windows
@@ -30,3 +33,41 @@ Agora helper app to download data and execute local tasks
     .\agora-app.exe install --user ENTER-YOUR-USERNAME --password ENTER-YOUR-PASSWORD
     .\agora-app.exe start
     ```
+
+### Linux
+#### Run as service (Recommended)
+Running the agora-app as service is the recommended way, but needs root privileges. If you don't have administrator privileges please go to the next section in order to [run the app as local user](#Run-as-local-user).
+
+1. Download the binary into a folder of your choice
+2. Change to the download directory and copy the binary to `/usr/local/bin/`:
+     ```
+     sudo cp ./agora-app /usr/local/bin/
+     ```
+3. Give it permissions to execute:
+     ```
+     sudo chmod +x /usr/local/bin/agora-app
+     ```
+4. Register the agora-app:
+     ```
+     sudo agora-app register
+     ```
+5. Install and run as service:
+     ```
+     sudo agora-app install --user=$USER --working-directory=$HOME
+     sudo agora-app start
+     ```
+
+#### Run as local user
+1. Download the binary into a folder of your choice and change into it
+2. Give it permissions to execute:
+     ```
+     chmod +x ./agora-app
+     ```
+3. Register the agora-app:
+     ```
+     ./agora-app register
+     ```
+4. Run the app:
+     ```
+     ./agora-app run
+     ```
