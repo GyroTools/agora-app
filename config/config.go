@@ -5,10 +5,17 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	uuid "github.com/nu7hatch/gouuid"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
+)
+
+const (
+	osTypeLinux   = "linux"
+	osTypeDarwin  = "darwin"
+	osTypeWindows = "windows"
 )
 
 type Configurations struct {
@@ -38,6 +45,9 @@ func NewConfig() Configurations {
 }
 
 func GetDefaultConfigFile() string {
+	if (runtime.GOOS == osTypeLinux || runtime.GOOS == osTypeDarwin) && os.Getuid() == 0 {
+		return "/etc/gyrotools/config.yml"
+	}
 	user_home, err := os.UserHomeDir()
 	if err != nil {
 		logrus.Fatal("Error cannot get the home directory: ", err)
