@@ -27,5 +27,5 @@ jobs:
         # Artifact name
         name: agora-app-artifact
         # A file, directory or wildcard pattern that describes what to upload
-        path: ./agora-app
-        if-no-files-found: error         
+        path: ${{ env.RUNNER_WORKSPACE }}/agora-app
+        if-no-files-found: warn         
