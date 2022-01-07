@@ -28,12 +28,15 @@ jobs:
     - name: Environment Printer
       uses: managedkaos/print-env@v1.0
       
-    - name: ls
+    - name: install
       run: | 
         go install
         ls -la ./
         ls -la /home/runner/go
         ls -la /home/runner/go/bin
+        echo ${GOPATH}
+        echo ${GOPATH}/bin
+        ls -la ${GOPATH}/bin
 
     - name: Upload Build Artifact
       uses: actions/upload-artifact@v2.3.1
