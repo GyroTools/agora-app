@@ -30,13 +30,14 @@ jobs:
       
     - name: install
       run: | 
-        go install
+        go install -v
         ls -la ./
         ls -la /home/runner/go
         ls -la /home/runner/go/bin
+        echo $GOPATH
         echo ${GOPATH}
-        echo ${GOPATH}/bin
-        ls -la ${GOPATH}/bin
+        echo ${{ env.GOPATH }}
+        echo GOPATH
 
     - name: Upload Build Artifact
       uses: actions/upload-artifact@v2.3.1
@@ -44,5 +45,5 @@ jobs:
         # Artifact name
         name: agora-app-artifact
         # A file, directory or wildcard pattern that describes what to upload
-        path: ${{ env.RUNNER_WORKSPACE }}/agora-app
+        path: /home/runner/go/bin/agora-app
         if-no-files-found: warn         
