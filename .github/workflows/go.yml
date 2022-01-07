@@ -7,9 +7,19 @@ on:
     branches: [ main ]
 
 jobs:
-
-  build:
+  releases-matrix:
+    name: Release Matrix
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, windows, darwin]
+        goarch: ["386", amd64]
+        exclude:  
+          # windows/386 and darwin/386 seems useless 
+          - goarch: "386"
+            goos: windows 
+          - goarch: "386"
+            goos: darwin     
     steps:
     - uses: actions/checkout@v2
 
@@ -27,14 +37,11 @@ jobs:
     - name: Set GOBIN env
       run: echo GOBIN=$(go env GOPATH) >> ${GITHUB_ENV} 
           
-    - name: Environment Printer
-      uses: managedkaos/print-env@v1.0     
-        
     - name: Upload Build Artifact
       uses: actions/upload-artifact@v2.3.1
       with:
         # Artifact name
         name: agora-app-artifact
         # A file, directory or wildcard pattern that describes what to upload
-        path: ${{ env.GOBIN }}/bin/agora-app
+        path: ${{ env.GOBIN }}/bin/
         if-no-files-found: warn         
