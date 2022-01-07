@@ -23,12 +23,18 @@ jobs:
       
     - name: install
       run: go install -v
-      
+    
+    - name: Set GOBIN env
+      run: echo GOBIN=$(go env GOPATH)
+    
+    - name: Environment Printer
+      uses: managedkaos/print-env@v1.0     
+        
     - name: Upload Build Artifact
       uses: actions/upload-artifact@v2.3.1
       with:
         # Artifact name
         name: agora-app-artifact
         # A file, directory or wildcard pattern that describes what to upload
-        path: $(go env GOPATH)/bin/agora-app
+        path: ${{ env.GOBIN }}/bin/agora-app
         if-no-files-found: warn         
