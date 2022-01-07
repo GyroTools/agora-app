@@ -40,8 +40,8 @@ jobs:
     - name: Upload Build Artifact
       uses: actions/upload-artifact@v2.3.1
       with:
-        # Artifact name
-        name: agora-app-artifact
+        # Artifact name        
+        name: agora-app ${{ goos }}
         # A file, directory or wildcard pattern that describes what to upload
         path: ${{ env.GOBIN }}/bin/
         if-no-files-found: warn         
