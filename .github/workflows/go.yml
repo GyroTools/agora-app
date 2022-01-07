@@ -20,6 +20,12 @@ jobs:
 
     - name: Build
       run: go build -v ./...
+      
+    - name: Environment Printer
+      uses: managedkaos/print-env@v1.0
+      
+    - name: ls
+      run: ls -la
 
     - name: Upload Build Artifact
       uses: actions/upload-artifact@v2.3.1
