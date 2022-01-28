@@ -41,27 +41,24 @@ func userModeWarning(withRun bool) {
 		!systemMode &&
 			runtime.GOOS == osTypeLinux
 
-	if systemMode {
-		logrus.Infoln("Running in system-mode.")
-	} else {
+	if !systemMode {
 		logrus.Warningln("Running in user-mode.")
 	}
 
 	if withRun {
 		if noServices {
-			logrus.Warningln("You need to manually start builds processing:")
-			logrus.Warningln("$ gitlab-runner run")
+			logrus.Warningln("The agora-app cannot be started as service. You need to manually start it with:")
+			logrus.Warningln("$ agora-app run")
 		} else if noUserService {
-			logrus.Warningln("The user-mode requires you to manually start builds processing:")
-			logrus.Warningln("$ gitlab-runner run")
+			logrus.Warningln("Without root privileges the agora-app cannot be started as service. You need to manually start it with:")
+			logrus.Warningln("$ agora-app run")
 		}
 	}
 
 	if !systemMode {
-		logrus.Warningln("Use sudo for system-mode:")
-		logrus.Warningln("$ sudo gitlab-runner...")
+		logrus.Warningln("Use sudo to run the agora-app as service:")
+		logrus.Warningln("$ sudo agora-app register")
 	}
-	logrus.Infoln("")
 }
 
 func isUrl(str string) bool {
