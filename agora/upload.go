@@ -447,9 +447,20 @@ func upload(agora_url string, api_key string, input_files []string, target_folde
 	return UploadProgress{}, nil
 }
 
-func UploadTaskResults(agora_url string, api_key string, result_folder string, target_folder_id int, exam_id int, series_id int, task_definition_id int, json_import_file string, wait bool, timeout int) (UploadProgress, error) {
-	input_files := []string{result_folder}
-	return upload(agora_url, api_key, input_files, target_folder_id, exam_id, series_id, task_definition_id, json_import_file, wait, timeout, true, false)
+func UploadTaskResults(agora_url string, api_key string, output_folder string, task_definition_id int, target TaskTarget, wait bool, timeout int) (UploadProgress, error) {
+	exam_id := -1
+	series_id := -1
+	folder_id := -1
+	if target.Type == "folder" {
+		folder_id = target.ID
+	} else if target.Type == "exam" {
+		exam_id = target.ID
+	} else if target.Type == "series" {
+		series_id = target.ID
+	}
+
+	input_files := []string{output_folder}
+	return upload(agora_url, api_key, input_files, folder_id, exam_id, series_id, task_definition_id, "", wait, timeout, true, false)
 }
 
 func Upload(agora_url string, api_key string, file_or_dir string, target_folder_id int, extract_zip bool, json_import_file string, wait bool, timeout int, fake bool) (UploadProgress, error) {

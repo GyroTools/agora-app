@@ -12,8 +12,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -69,6 +72,65 @@ type DownloadProgress struct {
 	Files     []DownloadFileProgress
 }
 
+type TaskTarget struct {
+	ID   int
+	Type string
+}
+
+type EnvValue struct {
+	Value string `json:"value"`
+	Add   bool   `json:"add"`
+}
+
+type EnvironmentVariable struct {
+	Key   string
+	Value string
+	Add   bool
+}
+
+type TaskFile struct {
+	ID         int
+	TargetPath string
+	Filename   string
+	Size       int64
+}
+
+type AdditionalScript struct {
+	Name       string `json:"name"`
+	ScriptPath string `json:"scriptPath"`
+	Script     string `json:"script"`
+}
+
+type TaskDataRaw struct {
+	AdditionalScripts []AdditionalScript  `json:"additionalScripts"`
+	CommandLine       string              `json:"commandLine"`
+	Environment       map[string]EnvValue `json:"environment"`
+	Name              string              `json:"name"`
+	TaskDefinition    int                 `json:"taskDefinition"`
+	TaskInfo          int                 `json:"taskInfo"`
+	OutputDirectory   string              `json:"outputDirectory"`
+	Script            string              `json:"script"`
+	ScriptPath        string              `json:"scriptPath"`
+	RequestID         string              `json:"requestId"`
+	Files             []interface{}       `json:"files"`
+	Target            []interface{}       `json:"target"`
+}
+
+type TaskData struct {
+	AdditionalScripts []AdditionalScript
+	CommandLine       string
+	Environment       []EnvironmentVariable
+	Name              string
+	TaskDefinition    int
+	TaskInfo          int
+	OutputDirectory   string
+	Script            string
+	ScriptPath        string
+	RequestID         string
+	Files             []DownloadFile
+	Target            TaskTarget
+}
+
 func join_url(agora_url string, path_str string) string {
 	u, _ := url.Parse(agora_url)
 	u.Path = path.Join(u.Path, path_str)
@@ -92,6 +154,28 @@ func GetRequest(request_url string, api_key string, user string, password string
 		req.Header.Set("Authorization", "X-Agora-Api-Key "+api_key)
 	} else if user != "" && password != "" {
 		req.Header.Add("Authorization", "Basic "+basicAuth(user, password))
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	return resp, err
+}
+
+func PostRequest(request_url string, body []byte, api_key string, user string, password string, content_type string) (*http.Response, error) {
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", request_url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+
+	if api_key != "" {
+		req.Header.Set("Authorization", "X-Agora-Api-Key "+api_key)
+	} else if user != "" && password != "" {
+		req.Header.Add("Authorization", "Basic "+basicAuth(user, password))
+	}
+	if content_type != "" {
+		req.Header.Set("Content-Type", content_type)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -161,6 +245,30 @@ func GetApiKey(agora_url string, user string, password string) string {
 
 func (n *DownloadFile) UnmarshalJSON(buf []byte) error {
 	tmp := []interface{}{&n.ID, &n.TargetPath, &n.Filename, &n.Size, &n.Hash}
+	wantLen := len(tmp)
+	if err := json.Unmarshal(buf, &tmp); err != nil {
+		return err
+	}
+	if g, e := len(tmp), wantLen; g != e {
+		return fmt.Errorf("wrong number of fields in Notification: %d != %d", g, e)
+	}
+	return nil
+}
+
+func (n *TaskFile) UnmarshalJSON(buf []byte) error {
+	tmp := []interface{}{&n.ID, &n.TargetPath, &n.Filename, &n.Size}
+	wantLen := len(tmp)
+	if err := json.Unmarshal(buf, &tmp); err != nil {
+		return err
+	}
+	if g, e := len(tmp), wantLen; g != e {
+		return fmt.Errorf("wrong number of fields in Notification: %d != %d", g, e)
+	}
+	return nil
+}
+
+func (n *TaskTarget) UnmarshalJSON(buf []byte) error {
+	tmp := []interface{}{&n.ID, &n.Type}
 	wantLen := len(tmp)
 	if err := json.Unmarshal(buf, &tmp); err != nil {
 		return err
@@ -420,6 +528,158 @@ func skipFiles(data DownloadData) (dd DownloadData) {
 	return dd
 }
 
+func saveScript(scriptPath string, script string) error {
+	parent := filepath.Dir(scriptPath)
+	err := os.MkdirAll(parent, os.ModePerm)
+	if err != nil {
+		logrus.Error("Error cannot create task output directory: ", parent)
+		return err
+	}
+	decodedScript, _ := base64.StdEncoding.DecodeString(script)
+
+	file, err := os.OpenFile(scriptPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		logrus.Errorf("Error opening/creating the script file %s: ", scriptPath, err)
+		return err
+	}
+	defer file.Close()
+
+	file.Write(decodedScript)
+
+	return nil
+}
+
+func performTask(cmdStr string, env []EnvironmentVariable) ([]byte, error) {
+	args := strings.Fields(cmdStr)
+	cmd := exec.Command(args[0], args[1:]...)
+
+	if runtime.GOOS == osTypeWindows {
+		args = append([]string{"/C"}, args...)
+		cmd = exec.Command("cmd", args[0:]...)
+	}
+
+	if len(env) > 0 {
+		cmd.Env = os.Environ()
+		for _, e := range env {
+			if e.Add {
+				found := false
+				for i, ee := range cmd.Env {
+					pair := strings.SplitN(ee, "=", 2)
+					existing_key := pair[0]
+					new_key := e.Key
+					if runtime.GOOS == osTypeWindows {
+						existing_key = strings.ToLower(existing_key)
+						new_key = strings.ToLower(new_key)
+					}
+					if existing_key == new_key {
+						cmd.Env[i] = fmt.Sprintf("%s=%s%s", pair[0], pair[1], e.Value)
+						found = true
+						break
+					}
+				}
+				if !found {
+					cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", e.Key, e.Value[1:]))
+				}
+			} else {
+				v := fmt.Sprintf("%s=%s", e.Key, e.Value)
+				cmd.Env = append(cmd.Env, v)
+			}
+		}
+
+	}
+
+	stdout, err := cmd.Output()
+	if err != nil {
+		return stdout, err
+	}
+
+	return stdout, nil
+}
+
+func updateOutput(taskId int, output []byte, name string, agora_url string, api_key string) error {
+	url_path := fmt.Sprintf("/api/v2/timeline/%d/%s_update/", taskId, name)
+
+	request_url := join_url(agora_url, url_path) + "/"
+	resp, err := PostRequest(request_url, output, api_key, "", "", "text/plain")
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		err = fmt.Errorf("http status = %d", resp.StatusCode)
+		return err
+	}
+
+	return nil
+}
+
+func dirIsEmpty(name string) bool {
+	f, err := os.Open(name)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	_, err = f.Readdirnames(1) // Or f.Readdir(1)
+	if err == io.EOF {
+		return true
+	}
+	return false // Either not empty or error, suits both cases
+}
+
+func runTask(data TaskData, conf config.Configurations, ws *websocket.Conn) error {
+	if len(data.Files) > 0 {
+		download_data := DownloadData{
+			Files:     data.Files,
+			RequestId: data.RequestID,
+		}
+		downloadFiles(download_data, conf, ws)
+	}
+
+	if data.OutputDirectory != "" {
+		err := os.MkdirAll(data.OutputDirectory, os.ModePerm)
+		if err != nil {
+			logrus.Error("Error cannot create task output directory: ", data.OutputDirectory)
+			return err
+		}
+	}
+
+	if data.Script != "" && data.ScriptPath != "" {
+		if err := saveScript(data.ScriptPath, data.Script); err != nil {
+			logrus.Error("Cannot save the script: ", err)
+			return err
+		}
+	}
+
+	for _, additionalFile := range data.AdditionalScripts {
+		scriptPath := additionalFile.ScriptPath
+		script := additionalFile.Script
+		if err := saveScript(scriptPath, script); err != nil {
+			logrus.Error("Cannot save the script: ", err)
+			return err
+		}
+	}
+
+	stdout, err_task := performTask(data.CommandLine, data.Environment)
+	if err_task != nil {
+		logrus.Error("Error cannot perform the task: ", err_task)
+	}
+
+	err_stdout := updateOutput(data.TaskInfo, stdout, "stdout", conf.Agora.Url, conf.Agora.ApiKey)
+	if err_stdout != nil {
+		logrus.Error("Error could not update stdout: ", err_stdout)
+	}
+
+	if err_task == nil && !dirIsEmpty(data.OutputDirectory) {
+		_, err := UploadTaskResults(conf.Agora.Url, conf.Agora.ApiKey, data.OutputDirectory, data.TaskDefinition, data.Target, true, -1)
+		if err != nil {
+			logrus.Error("Error could not upload results: ", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
 func ProcessDownload(data WsMessage, conf config.Configurations, ws *websocket.Conn) {
 	download_data_map := data.Data.Data
 	var download_data_raw DownloadDataRaw
@@ -445,4 +705,59 @@ func ProcessDownload(data WsMessage, conf config.Configurations, ws *websocket.C
 
 	downloadFiles(download_data, conf, ws)
 	copyFiles(copy_data, conf)
+}
+
+func ProcessRunTask(data WsMessage, conf config.Configurations, ws *websocket.Conn) {
+	task_data_map := data.Data.Data
+	var task_data_raw TaskDataRaw
+	mapstructure.Decode(task_data_map, &task_data_raw)
+	target_json, err := json.Marshal(task_data_raw.Target)
+	if err != nil {
+		logrus.Error("error:", err)
+	}
+	files_json, err := json.Marshal(task_data_raw.Files)
+	if err != nil {
+		logrus.Error("error:", err)
+	}
+	var target TaskTarget
+	if err := json.Unmarshal([]byte(target_json), &target); err != nil {
+		logrus.Error("Cannot parse task run data: ", err)
+	}
+	var files []TaskFile
+	if err := json.Unmarshal([]byte(files_json), &files); err != nil {
+		logrus.Error("Cannot parse task run data: ", err)
+	}
+
+	var download_files []DownloadFile
+	for _, file := range files {
+		download_files = append(download_files, DownloadFile{
+			ID:         file.ID,
+			TargetPath: file.TargetPath,
+			Filename:   file.Filename,
+			Size:       file.Size,
+			Hash:       "",
+		})
+	}
+
+	var env []EnvironmentVariable
+	for k, v := range task_data_raw.Environment {
+		env = append(env, EnvironmentVariable{Key: k, Value: v.Value, Add: v.Add})
+	}
+
+	task_data := TaskData{
+		AdditionalScripts: task_data_raw.AdditionalScripts,
+		CommandLine:       task_data_raw.CommandLine,
+		Environment:       env,
+		Name:              task_data_raw.Name,
+		TaskDefinition:    task_data_raw.TaskDefinition,
+		TaskInfo:          task_data_raw.TaskInfo,
+		OutputDirectory:   task_data_raw.OutputDirectory,
+		Script:            task_data_raw.Script,
+		ScriptPath:        task_data_raw.ScriptPath,
+		RequestID:         task_data_raw.RequestID,
+		Files:             download_files,
+		Target:            target,
+	}
+
+	runTask(task_data, conf, ws)
 }

@@ -24,6 +24,7 @@ const (
 	CommandPing             = "ping"
 	CommandDownload         = "download"
 	CommandDownloadProgress = "download_progress"
+	CommandRunTask          = "runTask"
 )
 
 type WsMessageData struct {
@@ -181,6 +182,8 @@ func WsProcess(ws websocket.Conn, data WsMessage, conf config.Configurations) {
 		websocket.JSON.Send(&ws, NewPingMessage(conf))
 	case CommandDownload:
 		ProcessDownload(data, conf, &ws)
+	case CommandRunTask:
+		ProcessRunTask(data, conf, &ws)
 	}
 }
 
