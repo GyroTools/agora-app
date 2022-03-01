@@ -549,7 +549,7 @@ func saveScript(scriptPath string, script string) error {
 	return nil
 }
 
-func performTask(cmdStr string, env []EnvironmentVariable) ([]byte, error) {
+func performTask(cmdStr string, env []EnvironmentVariable) ([]byte, []byte, error) {
 	args := strings.Fields(cmdStr)
 	cmd := exec.Command(args[0], args[1:]...)
 
@@ -588,12 +588,11 @@ func performTask(cmdStr string, env []EnvironmentVariable) ([]byte, error) {
 
 	}
 
-	stdout, err := cmd.Output()
-	if err != nil {
-		return stdout, err
-	}
-
-	return stdout, nil
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	return stdout.Bytes(), stderr.Bytes(), err
 }
 
 func updateOutput(taskId int, output []byte, name string, agora_url string, api_key string) error {
@@ -659,11 +658,15 @@ func runTask(data TaskData, conf config.Configurations, ws *websocket.Conn) erro
 		}
 	}
 
-	stdout, err_task := performTask(data.CommandLine, data.Environment)
+	stdout, stderr, err_task := performTask(data.CommandLine, data.Environment)
 	if err_task != nil {
 		logrus.Error("Error cannot perform the task: ", err_task)
 	}
 
+	err_stderr := updateOutput(data.TaskInfo, stderr, "stderr", conf.Agora.Url, conf.Agora.ApiKey)
+	if err_stderr != nil {
+		logrus.Error("Error could not update stderr: ", err_stderr)
+	}
 	err_stdout := updateOutput(data.TaskInfo, stdout, "stdout", conf.Agora.Url, conf.Agora.ApiKey)
 	if err_stdout != nil {
 		logrus.Error("Error could not update stdout: ", err_stdout)
