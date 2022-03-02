@@ -101,6 +101,15 @@ type AdditionalScript struct {
 	Script     string `json:"script"`
 }
 
+type TaskFinishData struct {
+	Command  string `json:"command"`
+	ExitCode int    `json:"exit_code"`
+}
+type TaskFinish struct {
+	Data  TaskFinishData `json:"data"`
+	Error *string        `json:"error"`
+}
+
 type TaskDataRaw struct {
 	AdditionalScripts []AdditionalScript  `json:"additionalScripts"`
 	CommandLine       string              `json:"commandLine"`
@@ -611,6 +620,40 @@ func updateOutput(taskId int, output []byte, name string, agora_url string, api_
 	return nil
 }
 
+func markTaskAsFinished(data TaskData, agora_url string, api_key string, err error) error {
+	exit_code := 0
+	if err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			exit_code = exitError.ExitCode()
+		}
+	}
+	var error_str *string
+	error_str = nil
+	if err != nil {
+		tmp := err.Error()
+		error_str = &tmp
+	}
+	body_data := TaskFinishData{Command: data.CommandLine, ExitCode: exit_code}
+	body := TaskFinish{Data: body_data, Error: error_str}
+	json_data, err := json.Marshal(body)
+	if err != nil {
+		logrus.Error("Cannot serialize data to json: ", err)
+	}
+	url_path := fmt.Sprintf("/api/v2/timeline/%d/finish_task/", data.TaskInfo)
+	request_url := join_url(agora_url, url_path) + "/"
+	resp, err := PostRequest(request_url, json_data, api_key, "", "", "application/json")
+
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		err = fmt.Errorf("http status = %d", resp.StatusCode)
+		return err
+	}
+
+	return nil
+}
+
 func dirIsEmpty(name string) bool {
 	f, err := os.Open(name)
 	if err != nil {
@@ -663,13 +706,13 @@ func runTask(data TaskData, conf config.Configurations, ws *websocket.Conn) erro
 		logrus.Error("Error cannot perform the task: ", err_task)
 	}
 
-	err_stderr := updateOutput(data.TaskInfo, stderr, "stderr", conf.Agora.Url, conf.Agora.ApiKey)
-	if err_stderr != nil {
-		logrus.Error("Error could not update stderr: ", err_stderr)
-	}
 	err_stdout := updateOutput(data.TaskInfo, stdout, "stdout", conf.Agora.Url, conf.Agora.ApiKey)
 	if err_stdout != nil {
 		logrus.Error("Error could not update stdout: ", err_stdout)
+	}
+	err_stderr := updateOutput(data.TaskInfo, stderr, "stderr", conf.Agora.Url, conf.Agora.ApiKey)
+	if err_stderr != nil {
+		logrus.Error("Error could not update stderr: ", err_stderr)
 	}
 
 	if err_task == nil && !dirIsEmpty(data.OutputDirectory) {
@@ -678,6 +721,11 @@ func runTask(data TaskData, conf config.Configurations, ws *websocket.Conn) erro
 			logrus.Error("Error could not upload results: ", err)
 			return err
 		}
+	}
+
+	err := markTaskAsFinished(data, conf.Agora.Url, conf.Agora.ApiKey, err_task)
+	if err != nil {
+		logrus.Error("Error could not set task as finished: ", err)
 	}
 
 	return nil
