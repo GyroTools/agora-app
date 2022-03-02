@@ -71,3 +71,74 @@ Running the agora-app as service is the recommended way, but needs root privileg
      ```
      ./agora-app run
      ```
+
+### macOS
+#### Run as service (Recommended)
+Running the agora-app as service is the recommended way, but needs root privileges. If you don't have administrator privileges please go to the next section in order to run the app as local user.
+
+1. Download the binary into a folder of your choice and and change into it
+2. Give it permissions to execute:
+     ```
+     sudo chmod +x ./agora-app
+     ```
+3. Register the agora-app:
+     ```
+     sudo agora-app register
+     ```
+4. Install and run as service:
+     ```
+     sudo agora-app install
+     sudo agora-app start
+     ```
+
+***Limitations on macOS***: *The service needs to be installed from a Terminal window logged in as your current user. Only then will you be able to manage the service.*
+
+
+#### Run as local user
+1. Download the binary into a folder of your choice and change into it
+2. Give it permissions to execute:
+     ```
+     chmod +x ./agora-app
+     ```
+3. Register the agora-app:
+     ```
+     ./agora-app register
+     ```
+4. Run the app:
+     ```
+     ./agora-app run
+     ```
+
+## Upload
+The agora-app can also be used to upload a file or folder from the command linee with the following syntax:
+
+```
+     agora-app upload --path <file_or_folder> <options>
+```
+
+```
+OPTIONS:
+   -p, --path           The path to a file or folder to be uploaded
+   -f, --target-folder  The ID of the target folder where the data is uploaded to (default: -1)
+   --extract-zip        If the uploaded file is a zip, it is extracted and its content is imported into Agora (default: false)
+   -j, --import-json    The json which will be used for the import
+   --fake               Run the uploader without actually uploading the files (for testing and debugging) (default: false)
+   -h, --help           show help (default: false)
+```
+
+### Examples
+
+1. Upload a file into the Agora folder with ID = 13
+     ```
+          agora-app upload --path /data/my_dicom.dcm --target-folder 13
+     ```
+
+2. Upload an entire folder
+     ```
+          agora-app upload -p /data/ -f 13
+     ```
+
+3. Upload a .zip file and import its content
+     ```
+          agora-app upload -p /data/my_data.zip -f 13  --extract-zip 
+     ```
