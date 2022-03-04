@@ -2,7 +2,7 @@
 Agora helper app to download data and execute local tasks
 
 ## Download
-The agora-app can be downloaded from the [GyroTools Github](https://github.com/GyroTools/agora-app/releases). Please make sure you choose the correct platform.
+The latest release of the agora-app can be found [here](https://github.com/GyroTools/agora-app/releases/latest/). Please make sure you choose the correct platform.
 
 ## Installation
 
