@@ -159,10 +159,12 @@ func upload_file(request_url string, api_key string, file UploadFile, fake bool)
 	fileInfo, err := os.Stat(file.SourcePath)
 
 	if file.Delete {
+		logrus.Debugf("file will be removed after upload: %s", file.SourcePath)
 		defer os.Remove(file.SourcePath)
 	}
 
 	if err != nil {
+		logrus.Fatalf("Could not get the file size of %s: %w", file.SourcePath, err)
 		return err
 	}
 	filesize := fileInfo.Size()
@@ -171,12 +173,14 @@ func upload_file(request_url string, api_key string, file UploadFile, fake bool)
 	client := &http.Client{}
 	r, err := os.Open(file.SourcePath)
 	if err != nil {
+		logrus.Fatalf("Could not open the file %s: %w", file.SourcePath, err)
 		return err
 	}
 	uuid, _ := uuid.NewV4()
 
 	chunk_failed := false
 	for i := 0; i < nof_chunks; i++ {
+		logrus.Debugf("uploading chunk %d/%d", i, nof_chunks)
 		n, err := r.Read(buffer)
 		if err != nil {
 			chunk_failed = true
@@ -237,9 +241,11 @@ func zip_and_upload(fileCh chan UploadFile, request_url string, api_key string, 
 	for index < len(files_to_zip) {
 		zip_filename := fmt.Sprintf("upload_%d.agora_upload", index)
 		zip_path := filepath.Join(temp_dir, zip_filename)
+		logrus.Debugf("creating zip file: %s", zip_path)
 
 		file, err := os.Create(zip_path)
 		if err != nil {
+			logrus.Fatalf("Could not create the zip file %s: %w", file, err)
 			return err
 		}
 		defer file.Close()
@@ -248,8 +254,10 @@ func zip_and_upload(fileCh chan UploadFile, request_url string, api_key string, 
 		defer w.Close()
 
 		for _, file_to_zip := range files_to_zip[index:] {
+			logrus.Debugf("adding file to zip: %s (path in zipfile: %s)", file_to_zip.SourcePath, file_to_zip.TargetPath)
 			file, err := os.Open(file_to_zip.SourcePath)
 			if err != nil {
+				logrus.Fatalf("Could not open the file %s: %w", file_to_zip.SourcePath, err)
 				return err
 			}
 			defer file.Close()
@@ -257,11 +265,13 @@ func zip_and_upload(fileCh chan UploadFile, request_url string, api_key string, 
 			relative_path := file_to_zip.TargetPath
 			f, err := w.Create(relative_path)
 			if err != nil {
+				logrus.Fatalf("Could not create the path %s in zip: %w", relative_path, err)
 				return err
 			}
 
 			_, err = io.Copy(f, file)
 			if err != nil {
+				logrus.Fatalf("Could not add %s to the zip file: %w", file_to_zip.SourcePath, err)
 				return err
 			}
 
@@ -269,6 +279,7 @@ func zip_and_upload(fileCh chan UploadFile, request_url string, api_key string, 
 
 			fileInfo, err := os.Stat(zip_path)
 			if err == nil && fileInfo.Size() > MAX_ZIP_SIZE {
+				logrus.Debugf("zip file exceeded %d MB --> uploading it", MAX_ZIP_SIZE/1024/1024)
 				break
 			}
 		}
@@ -476,5 +487,6 @@ func Upload(agora_url string, api_key string, file_or_dir string, target_folder_
 	}
 
 	input_files := []string{file_or_dir}
+	logrus.Debugf("Starting upload of %s to %s", file_or_dir, agora_url)
 	return upload(agora_url, api_key, input_files, target_folder_id, -1, -1, -1, json_import_file, wait, timeout, extract_zip, fake)
 }

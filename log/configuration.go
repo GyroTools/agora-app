@@ -18,8 +18,8 @@ var (
 	configuration = NewConfig(logrus.StandardLogger())
 	logFlags      = []cli.Flag{
 		&cli.BoolFlag{
-			Name:    "debug",
-			Usage:   "debug mode",
+			Name:    "verbose",
+			Usage:   "verbose mode, print processing details",
 			EnvVars: []string{"DEBUG"},
 		},
 		&cli.StringFlag{
@@ -82,7 +82,7 @@ func (l *Config) handleCliCtx(cliCtx *cli.Context) error {
 		l.levelSetWithCli = true
 	}
 
-	if cliCtx.Bool("debug") {
+	if cliCtx.Bool("verbose") {
 		l.level = logrus.DebugLevel
 		l.levelSetWithCli = true
 	}
