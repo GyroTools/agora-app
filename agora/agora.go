@@ -4,6 +4,7 @@ import (
 	"agora-app/config"
 	"bytes"
 	"crypto/sha1"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -150,6 +151,12 @@ func join_url(agora_url string, path_str string) string {
 func basicAuth(username, password string) string {
 	auth := username + ":" + password
 	return base64.StdEncoding.EncodeToString([]byte(auth))
+}
+
+func HandleNoCertificateCheck(no_certificate_check bool) {
+	if no_certificate_check {
+		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
 }
 
 func GetRequest(request_url string, api_key string, user string, password string) (*http.Response, error) {

@@ -192,8 +192,20 @@ func init() {
 				Value: config.GetDefaultConfigFile(),
 				Usage: "The path to the config file",
 			},
+			&cli.BoolFlag{
+				Name:  "no-certificate-check",
+				Value: false,
+				Usage: "disables the ssl certificate check (security risk!)",
+			},
 		},
 		Action: func(c *cli.Context) error {
+			cur_conf, err := config.GetConf(c.String("config"), false)
+			if err == nil {
+				cur_conf.General.NoCertificateCheck = c.Bool("no-certificate-check")
+				config.WriteConf(cur_conf, c.String("config"))
+			}
+			agora.HandleNoCertificateCheck(cur_conf.General.NoCertificateCheck)
+
 			userModeWarning(true)
 			conf := run(c.String("download-path"), c.String("url"), c.String("user"), c.String("password"), c.String("config"))
 			config.WriteConf(conf, c.String("config"))

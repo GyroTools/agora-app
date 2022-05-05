@@ -33,6 +33,7 @@ type GeneralConfigurations struct {
 	Uid                 string `yaml:"uid"`
 	BasePath            string `yaml:"base-path"`
 	NrParallelDownloads int    `yaml:"nr-parallel-downloads"`
+	NoCertificateCheck  bool   `yaml:"no-certificate-check"`
 }
 
 func NewConfig() Configurations {

@@ -40,6 +40,7 @@ func main() {
 		},
 	}
 	app.Commands = commands.Get()
+	app.Flags = commands.GetFlags()
 
 	sort.Sort(cli.CommandsByName(app.Commands))
 

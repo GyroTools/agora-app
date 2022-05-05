@@ -13,6 +13,7 @@ func Upload(c *cli.Context) error {
 	if err != nil {
 		logrus.Fatal("Cannot read the config file")
 	}
+	agora.HandleNoCertificateCheck(conf.General.NoCertificateCheck)
 	_, err = agora.Upload(conf.Agora.Url, conf.Agora.ApiKey, c.String("path"), c.Int("target-folder"), c.Bool("extract-zip"), c.String("import-json"), true, -1, c.Bool("fake"))
 	if err != nil {
 		logrus.Fatal(err)

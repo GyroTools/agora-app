@@ -2,6 +2,7 @@ package agora
 
 import (
 	"agora-app/config"
+	"crypto/tls"
 	"net/http"
 	"net/url"
 	"os"
@@ -203,6 +204,14 @@ func Connect(conf config.Configurations) (ws *websocket.Conn, err error) {
 	config.Header = http.Header{
 		"Authorization": {"Token " + conf.Agora.SessionKey},
 	}
+
+	if conf.General.NoCertificateCheck {
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: true,
+		}
+		config.TlsConfig = tlsConfig
+	}
+
 	ws, err = websocket.DialConfig(config)
 	if err == nil {
 		websocket.JSON.Send(ws, NewPingMessage(conf))
