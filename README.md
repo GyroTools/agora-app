@@ -109,6 +109,14 @@ Running the agora-app as service is the recommended way, but needs root privileg
      ./agora-app run
      ```
 
+### Self-Signed Certificates
+the app might not be able to connect if your Agora server uses a self-signed certificate. In that case you can disable the certificate check while registering the app:
+     ```
+     ./agora-app register --no-certificate-check
+     ```
+
+
+
 ## Upload
 The agora-app can also be used to upload a file or folder from the command linee with the following syntax:
 

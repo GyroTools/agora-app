@@ -148,10 +148,9 @@ func run(download_path string, agora_url string, user string, password string, c
 	fmt.Print("\nPlease wait...")
 
 	api_key := agora.GetApiKey(c.Agora.Url, user, password)
-	success := agora.CheckConnection(c.Agora.Url, api_key)
+	success, err := agora.CheckConnection(c.Agora.Url, api_key)
 	if !success {
-		fmt.Fprintf(os.Stderr, "Error: Cannot connect to the Agora server with the api-key\n")
-		os.Exit(1)
+		logrus.Fatal(os.Stderr, "Error: Cannot connect to the Agora server with the api-key: ", err)
 	}
 	c.Agora.ApiKey = api_key
 

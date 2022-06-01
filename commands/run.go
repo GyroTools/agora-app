@@ -55,8 +55,9 @@ func (app *AgoraApp) run() error {
 		logrus.Fatal("Cannot read the config file: ", err)
 	}
 	agora.HandleNoCertificateCheck(conf.General.NoCertificateCheck)
-	if !agora.CheckConnection(conf.Agora.Url, conf.Agora.ApiKey) {
-		logrus.Fatal("Cannot connect to Agora on ", conf.Agora.Url)
+	success, err := agora.CheckConnection(conf.Agora.Url, conf.Agora.ApiKey)
+	if !success {
+		logrus.Fatal("Cannot connect to Agora: ", err)
 	}
 	ws, err := agora.StartWebSocket(conf)
 	if err != nil {

@@ -200,16 +200,16 @@ func PostRequest(request_url string, body []byte, api_key string, user string, p
 	return resp, err
 }
 
-func Ping(agora_url string) bool {
+func Ping(agora_url string) (bool, error) {
 	request_url := join_url(agora_url, "/api/v1/version/")
 	resp, err := GetRequest(request_url, "", "", "")
-	return err == nil && resp.StatusCode == 200
+	return err == nil && resp.StatusCode == 200, err
 }
 
-func CheckConnection(agora_url string, apikey string) bool {
+func CheckConnection(agora_url string, apikey string) (bool, error) {
 	request_url := join_url(agora_url, "/api/v1/user/current/")
 	resp, err := GetRequest(request_url, apikey, "", "")
-	return err == nil && resp.StatusCode == 200
+	return err == nil && resp.StatusCode == 200, err
 }
 
 func Login(agora_url string, user string, password string) string {
@@ -237,10 +237,9 @@ func Login(agora_url string, user string, password string) string {
 }
 
 func GetApiKey(agora_url string, user string, password string) string {
-	success := Ping(agora_url)
+	success, err := Ping(agora_url)
 	if !success {
-		fmt.Fprintf(os.Stderr, "Error: Cannot connect to the Agora server\n")
-		os.Exit(1)
+		logrus.Fatal("Error: Cannot connect to the Agora server: ", err)
 	}
 	request_url := join_url(agora_url, "/api/v1/apikey/") + "/"
 	resp, err := GetRequest(request_url, "", user, password)
