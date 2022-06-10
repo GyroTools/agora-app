@@ -34,6 +34,15 @@ The latest release of the agora-app can be found [here](https://github.com/GyroT
     .\agora-app.exe start
     ```
 
+#### Windows service and GUI applications
+For security reasons a Windows service is not allowed to start an application with a user-interface. This can be a problem if a local Agora-task needs to open a GUI application (e.g. notepad). In that case you will need to run the agora-app as local user in a command prompt:
+
+     ```
+     ./agora-app run
+     ```
+
+If the app should be started with Windows it can be added to the autostart. 
+
 ### Linux
 #### Run as service (Recommended)
 Running the agora-app as service is the recommended way, but needs root privileges. If you don't have administrator privileges please go to the next section in order to [run the app as local user](#Run-as-local-user).
