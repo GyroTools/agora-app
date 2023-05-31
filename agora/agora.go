@@ -51,14 +51,24 @@ type DownloadFile struct {
 	Hash       string
 }
 
+type DownloadRequestData struct {
+	ExamIds    []int `json:"exam_ids"`
+	SeriesIds  []int `json:"series_ids"`
+	PatientIds []int `json:"patient_ids"`
+	DatasetIds []int `json:"dataset_ids"`
+	FolderIds  []int `json:"folder_ids"`
+}
+
 type DownloadDataRaw struct {
-	Files     []interface{} `json:"files"`
-	RequestId string        `json:"requestId"`
+	Files       []interface{}       `json:"files"`
+	RequestId   string              `json:"requestId"`
+	RequestData DownloadRequestData `json:"request_data"`
 }
 
 type DownloadData struct {
-	Files     []DownloadFile `json:"files"`
-	RequestId string         `json:"requestId"`
+	Files       []DownloadFile      `json:"files"`
+	RequestId   string              `json:"requestId"`
+	RequestData DownloadRequestData `json:"request_data"`
 }
 
 type DownloadFileProgress struct {
@@ -294,6 +304,13 @@ func (n *TaskTarget) UnmarshalJSON(buf []byte) error {
 	return nil
 }
 
+func requestDataIsEmpty(requestData DownloadRequestData) bool {
+	if len(requestData.ExamIds) == 0 && len(requestData.PatientIds) == 0 && len(requestData.SeriesIds) == 0 && len(requestData.FolderIds) == 0 && len(requestData.DatasetIds) == 0 {
+		return true
+	}
+	return false
+}
+
 func sendProgress(done chan bool, progress DownloadProgress, ws *websocket.Conn, request_id string) {
 	var stop bool = false
 	var last_value float32 = 0.0
@@ -407,23 +424,30 @@ func downloadWorker(fileChan chan DownloadFile, conf config.Configurations, wg *
 }
 
 func downloadFiles(data DownloadData, conf config.Configurations, ws *websocket.Conn) {
+	const directDownloadThresholdMb int64 = 20
+	advanced_download := !requestDataIsEmpty(data.RequestData)
+
 	var total_size int64
 	total_size = 0
 	file_progress := []DownloadFileProgress{}
+	var direct_downloads []DownloadFile
 	for _, file := range data.Files {
-		total_size += file.Size
-		file_progress = append(file_progress, DownloadFileProgress{Path: filepath.Join(file.TargetPath, file.Filename), Size: file.Size, Transferred: 0})
+		if !advanced_download || file.Size/1024*1024 > directDownloadThresholdMb {
+			total_size += file.Size
+			file_progress = append(file_progress, DownloadFileProgress{Path: filepath.Join(file.TargetPath, file.Filename), Size: file.Size, Transferred: 0})
+			direct_downloads = append(direct_downloads, file)
+		}
 	}
 
 	progress := DownloadProgress{
-		NrFiles:   len(data.Files),
+		NrFiles:   len(direct_downloads),
 		TotalSize: total_size,
 		Files:     file_progress,
 	}
 
 	parallel_downloads := conf.General.NrParallelDownloads
 
-	fileCh := make(chan DownloadFile, len(data.Files))
+	fileCh := make(chan DownloadFile, len(direct_downloads))
 	wg := new(sync.WaitGroup)
 
 	progressCh := make(chan bool)
@@ -436,7 +460,7 @@ func downloadFiles(data DownloadData, conf config.Configurations, ws *websocket.
 	}
 
 	// Processing all links by spreading them to `free` goroutines
-	for _, file := range data.Files {
+	for _, file := range direct_downloads {
 		fileCh <- file
 	}
 
@@ -751,8 +775,9 @@ func ProcessDownload(data WsMessage, conf config.Configurations, ws *websocket.C
 	}
 
 	download_data := DownloadData{
-		Files:     download_files,
-		RequestId: download_data_raw.RequestId,
+		Files:       download_files,
+		RequestId:   download_data_raw.RequestId,
+		RequestData: download_data_raw.RequestData,
 	}
 
 	// do not re-download files if they already exist and the hash is the same
