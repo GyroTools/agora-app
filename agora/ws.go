@@ -177,14 +177,14 @@ func WsListen(ws *websocket.Conn) (data WsMessage, err error) {
 	return data, err
 }
 
-func WsProcess(ws websocket.Conn, data WsMessage, conf config.Configurations) {
+func WsProcess(ws *websocket.Conn, data WsMessage, conf config.Configurations) {
 	switch data.Data.Command {
 	case CommandHello:
-		websocket.JSON.Send(&ws, NewPingMessage(conf))
+		websocket.JSON.Send(ws, NewPingMessage(conf))
 	case CommandDownload:
-		ProcessDownload(data, conf, &ws)
+		ProcessDownload(data, conf, ws)
 	case CommandRunTask:
-		ProcessRunTask(data, conf, &ws)
+		ProcessRunTask(data, conf, ws)
 	}
 }
 

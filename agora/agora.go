@@ -2,6 +2,7 @@ package agora
 
 import (
 	"agora-app/config"
+	"archive/zip"
 	"bytes"
 	"crypto/sha1"
 	"crypto/tls"
@@ -10,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -51,20 +53,48 @@ type DownloadFile struct {
 	Hash       string
 }
 
+type DownloadRequestData struct {
+	ExamIds    []int `json:"examIds"`
+	SeriesIds  []int `json:"seriesIds"`
+	PatientIds []int `json:"patientIds"`
+	DatasetIds []int `json:"datasetIds"`
+	FolderIds  []int `json:"folderIds"`
+}
+
+type DownloadZipFilter struct {
+	DatafileIds []int `json:"datafile_ids"`
+}
+
+type DownloadZipBody struct {
+	ExamIds    []int             `json:"exam_ids"`
+	SeriesIds  []int             `json:"series_ids"`
+	PatientIds []int             `json:"patient_ids"`
+	DatasetIds []int             `json:"dataset_ids"`
+	FolderIds  []int             `json:"folder_ids"`
+	Filter     DownloadZipFilter `json:"filter"`
+}
+
 type DownloadDataRaw struct {
-	Files     []interface{} `json:"files"`
-	RequestId string        `json:"requestId"`
+	Files       []interface{}       `json:"files"`
+	RequestId   string              `json:"requestId"`
+	RequestData DownloadRequestData `json:"requestData"`
 }
 
 type DownloadData struct {
-	Files     []DownloadFile `json:"files"`
-	RequestId string         `json:"requestId"`
+	Files       []DownloadFile      `json:"files"`
+	RequestId   string              `json:"requestId"`
+	RequestData DownloadRequestData `json:"requestData"`
 }
 
 type DownloadFileProgress struct {
 	Path        string
 	Size        int64
 	Transferred int64
+}
+
+type DownloadZipFile struct {
+	ID    int  `json:"id"`
+	Ready bool `json:"ready"`
 }
 
 type DownloadProgress struct {
@@ -294,6 +324,13 @@ func (n *TaskTarget) UnmarshalJSON(buf []byte) error {
 	return nil
 }
 
+func requestDataIsEmpty(requestData DownloadRequestData) bool {
+	if len(requestData.ExamIds) == 0 && len(requestData.PatientIds) == 0 && len(requestData.SeriesIds) == 0 && len(requestData.FolderIds) == 0 && len(requestData.DatasetIds) == 0 {
+		return true
+	}
+	return false
+}
+
 func sendProgress(done chan bool, progress DownloadProgress, ws *websocket.Conn, request_id string) {
 	var stop bool = false
 	var last_value float32 = 0.0
@@ -355,19 +392,92 @@ func getFileHash(filename string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
+func unzip(src, dest string) error {
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := r.Close(); err != nil {
+			panic(err)
+		}
+	}()
+
+	os.MkdirAll(dest, 0755)
+
+	// Closure to address file descriptors issue with all the deferred .Close() methods
+	extractAndWriteFile := func(f *zip.File) error {
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if err := rc.Close(); err != nil {
+				panic(err)
+			}
+		}()
+
+		path := filepath.Join(dest, f.Name)
+
+		// Check for ZipSlip (Directory traversal)
+		if !strings.HasPrefix(path, filepath.Clean(dest)+string(os.PathSeparator)) {
+			return fmt.Errorf("illegal file path: %s", path)
+		}
+
+		if f.FileInfo().IsDir() {
+			os.MkdirAll(path, f.Mode())
+		} else {
+			os.MkdirAll(filepath.Dir(path), f.Mode())
+			f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+			if err != nil {
+				return err
+			}
+			defer func() {
+				if err := f.Close(); err != nil {
+					panic(err)
+				}
+			}()
+
+			_, err = io.Copy(f, rc)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	for _, f := range r.File {
+		err := extractAndWriteFile(f)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func downloadFile(agora_url string, api_key string, file DownloadFile) error {
+	is_zip := file.Hash == "zip_download"
 	url_path := fmt.Sprintf("/api/v1/datafile/%d/download/", file.ID)
+	if is_zip {
+		url_path = fmt.Sprintf("/api/v1/downloadfile/%d/download/", file.ID)
+	}
+
 	request_url := join_url(agora_url, url_path) + "/"
 
 	resp, err := GetRequest(request_url, api_key, "", "")
 	if err != nil {
-		logrus.Errorf("Error failed to download file %d: ", file.ID, err)
+		logrus.Errorf("Error failed to download file %d: ", file.ID)
 		return err
 	}
 
 	defer resp.Body.Close()
 
 	filename := filepath.Join(file.TargetPath, file.Filename)
+	if is_zip {
+		filename = file.TargetPath
+		defer os.Remove(filename)
+	}
 	parent := filepath.Dir(filename)
 
 	// create directories
@@ -381,7 +491,7 @@ func downloadFile(agora_url string, api_key string, file DownloadFile) error {
 
 	out, err := os.Create(filename)
 	if err != nil {
-		logrus.Errorf("Error cannot create the file %s: ", filename, err)
+		logrus.Errorf("Error cannot create the file %s: ", filename)
 		return err
 	}
 	logrus.Infof("Downloading datafile: id = %d, target = %s", file.ID, filename)
@@ -391,6 +501,14 @@ func downloadFile(agora_url string, api_key string, file DownloadFile) error {
 	if err != nil {
 		logrus.Error("Error cannot create the directory: ", parent)
 		return err
+	}
+
+	if is_zip {
+		unzip(filename, file.Filename)
+		if err != nil {
+			logrus.Errorf("could not unzip the file: %s", filename)
+			return err
+		}
 	}
 
 	logrus.Infof("Download finished:  id = %d", file.ID)
@@ -406,24 +524,87 @@ func downloadWorker(fileChan chan DownloadFile, conf config.Configurations, wg *
 	}
 }
 
+func requestZipFile(requestData DownloadRequestData, datafileIds []int, conf config.Configurations) (*DownloadZipFile, error) {
+	filter := DownloadZipFilter{DatafileIds: datafileIds}
+	body := DownloadZipBody{ExamIds: requestData.ExamIds, SeriesIds: requestData.SeriesIds, PatientIds: requestData.PatientIds, FolderIds: requestData.FolderIds, DatasetIds: requestData.DatasetIds, Filter: filter}
+	json_data, err := json.Marshal(body)
+	if err != nil {
+		logrus.Error("Cannot serialize data to json: ", err)
+	}
+	url_path := "/api/v1/downloadfile/"
+	request_url := join_url(conf.Agora.Url, url_path) + "/"
+	resp, err := PostRequest(request_url, json_data, conf.Agora.ApiKey, "", "", "application/json")
+
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		err = fmt.Errorf("http status = %d", resp.StatusCode)
+		return nil, err
+	}
+
+	target := new(DownloadZipFile)
+	json.NewDecoder(resp.Body).Decode(target)
+	if target.ID == 0 {
+		err = fmt.Errorf("download file ID is 0")
+		return nil, err
+	}
+
+	return target, nil
+}
+
+func waitUntilReady(downloadFile DownloadZipFile, conf config.Configurations) error {
+	url_path := fmt.Sprintf("/api/v1/downloadfile/%d", downloadFile.ID)
+	request_url := join_url(conf.Agora.Url, url_path) + "/"
+
+	ready := false
+	for ready == false {
+		resp, err := GetRequest(request_url, conf.Agora.ApiKey, "", "")
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode != 200 {
+			err = fmt.Errorf("http status = %d", resp.StatusCode)
+			return err
+		}
+
+		target := new(DownloadZipFile)
+		json.NewDecoder(resp.Body).Decode(target)
+		ready = target.Ready
+		time.Sleep(1 * time.Second)
+	}
+
+	return nil
+}
+
 func downloadFiles(data DownloadData, conf config.Configurations, ws *websocket.Conn) {
+	const directDownloadThresholdMb int64 = 20
+	advanced_download := !requestDataIsEmpty(data.RequestData) && len(data.Files) > 20
+
 	var total_size int64
 	total_size = 0
 	file_progress := []DownloadFileProgress{}
+	var direct_downloads []DownloadFile
+	var datafile_ids__for_zip_download []int
 	for _, file := range data.Files {
-		total_size += file.Size
-		file_progress = append(file_progress, DownloadFileProgress{Path: filepath.Join(file.TargetPath, file.Filename), Size: file.Size, Transferred: 0})
+		if !advanced_download || file.Size/1024/1024 > directDownloadThresholdMb {
+			total_size += file.Size
+			file_progress = append(file_progress, DownloadFileProgress{Path: filepath.Join(file.TargetPath, file.Filename), Size: file.Size, Transferred: 0})
+			direct_downloads = append(direct_downloads, file)
+		} else if advanced_download {
+			datafile_ids__for_zip_download = append(datafile_ids__for_zip_download, file.ID)
+		}
 	}
 
 	progress := DownloadProgress{
-		NrFiles:   len(data.Files),
+		NrFiles:   len(direct_downloads),
 		TotalSize: total_size,
 		Files:     file_progress,
 	}
 
 	parallel_downloads := conf.General.NrParallelDownloads
 
-	fileCh := make(chan DownloadFile, len(data.Files))
+	fileCh := make(chan DownloadFile, len(direct_downloads)+1)
 	wg := new(sync.WaitGroup)
 
 	progressCh := make(chan bool)
@@ -436,8 +617,40 @@ func downloadFiles(data DownloadData, conf config.Configurations, ws *websocket.
 	}
 
 	// Processing all links by spreading them to `free` goroutines
-	for _, file := range data.Files {
+	for _, file := range direct_downloads {
 		fileCh <- file
+	}
+
+	// download zip file
+	if advanced_download && len(datafile_ids__for_zip_download) > 0 {
+		failed := false
+		download_file, err := requestZipFile(data.RequestData, datafile_ids__for_zip_download, conf)
+		if err != nil {
+			logrus.Error("zip download request failed: ", err)
+			failed = true
+		} else {
+			if !download_file.Ready {
+				err = waitUntilReady(*download_file, conf)
+				if err != nil {
+					logrus.Error("poll of download file failed: ", err)
+					failed = true
+				}
+			}
+		}
+		if !failed {
+			file, err := ioutil.TempFile("", "agora_zip")
+			if err != nil {
+				logrus.Error("cannot create temporary zip file", err)
+				failed = true
+			}
+			file.Close()
+
+			if !failed {
+				zip_download := DownloadFile{ID: download_file.ID, TargetPath: file.Name(), Filename: conf.General.BasePath, Hash: "zip_download"}
+				fileCh <- zip_download
+			}
+
+		}
 	}
 
 	// Closing channel (waiting in goroutines won't continue any more)
@@ -505,6 +718,7 @@ func contains(s []int, e int) bool {
 func getDuplicates(data DownloadData) (dd DownloadData, cd CopyData) {
 	dd.RequestId = data.RequestId
 	cd.RequestId = data.RequestId
+	dd.RequestData = data.RequestData
 	var duplicates []int
 	for i := range data.Files {
 		if contains(duplicates, i) {
@@ -525,6 +739,7 @@ func getDuplicates(data DownloadData) (dd DownloadData, cd CopyData) {
 
 func skipFiles(data DownloadData) (dd DownloadData) {
 	dd.RequestId = data.RequestId
+	dd.RequestData = data.RequestData
 	for _, file := range data.Files {
 		filename := filepath.Join(file.TargetPath, file.Filename)
 		if _, err := os.Stat(filename); !os.IsNotExist(err) {
@@ -554,7 +769,7 @@ func saveScript(scriptPath string, script string) error {
 
 	file, err := os.OpenFile(scriptPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
-		logrus.Errorf("Error opening/creating the script file %s: ", scriptPath, err)
+		logrus.Errorf("Error opening/creating the script file %s: ", scriptPath)
 		return err
 	}
 	defer file.Close()
@@ -747,12 +962,13 @@ func ProcessDownload(data WsMessage, conf config.Configurations, ws *websocket.C
 	}
 	var download_files []DownloadFile
 	if err := json.Unmarshal([]byte(download_files_json), &download_files); err != nil {
-		logrus.Error("Cannot parse download file: ", err)
+		logrus.Error("Cannot pars e download file: ", err)
 	}
 
 	download_data := DownloadData{
-		Files:     download_files,
-		RequestId: download_data_raw.RequestId,
+		Files:       download_files,
+		RequestId:   download_data_raw.RequestId,
+		RequestData: download_data_raw.RequestData,
 	}
 
 	// do not re-download files if they already exist and the hash is the same
