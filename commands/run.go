@@ -94,8 +94,8 @@ func (app *AgoraApp) run() error {
 					logrus.Info("Reconnected to Agora")
 				}
 			} else {
-				logrus.Debug("Received message: %s.\n", msg)
-				go agora.WsProcess(*ws, msg, conf)
+				logrus.Debugf("Received message: %s.\n", msg)
+				go agora.WsProcess(ws, msg, conf)
 			}
 		}
 	}

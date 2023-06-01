@@ -164,7 +164,7 @@ func upload_file(request_url string, api_key string, file UploadFile, fake bool)
 	}
 
 	if err != nil {
-		logrus.Fatalf("Could not get the file size of %s: %w", file.SourcePath, err)
+		logrus.Fatalf("Could not get the file size of %s: %v", file.SourcePath, err)
 		return err
 	}
 	filesize := fileInfo.Size()
@@ -173,7 +173,7 @@ func upload_file(request_url string, api_key string, file UploadFile, fake bool)
 	client := &http.Client{}
 	r, err := os.Open(file.SourcePath)
 	if err != nil {
-		logrus.Fatalf("Could not open the file %s: %w", file.SourcePath, err)
+		logrus.Fatalf("Could not open the file %s: %v", file.SourcePath, err)
 		return err
 	}
 	uuid, _ := uuid.NewV4()
@@ -209,7 +209,7 @@ func upload_file(request_url string, api_key string, file UploadFile, fake bool)
 	}
 	r.Close()
 	if chunk_failed {
-		logrus.Errorf("could not upload the file %s", file)
+		logrus.Errorf("could not upload the file %s", file.SourcePath)
 		return err
 	}
 	return nil
@@ -245,7 +245,7 @@ func zip_and_upload(fileCh chan UploadFile, request_url string, api_key string, 
 
 		file, err := os.Create(zip_path)
 		if err != nil {
-			logrus.Fatalf("Could not create the zip file %s: %w", file, err)
+			logrus.Fatalf("Could not create the zip file %s: %v", zip_path, err)
 			return err
 		}
 		defer file.Close()
@@ -257,7 +257,7 @@ func zip_and_upload(fileCh chan UploadFile, request_url string, api_key string, 
 			logrus.Debugf("adding file to zip: %s (path in zipfile: %s)", file_to_zip.SourcePath, file_to_zip.TargetPath)
 			file, err := os.Open(file_to_zip.SourcePath)
 			if err != nil {
-				logrus.Fatalf("Could not open the file %s: %w", file_to_zip.SourcePath, err)
+				logrus.Fatalf("Could not open the file %s: %v", file_to_zip.SourcePath, err)
 				return err
 			}
 			defer file.Close()
@@ -265,13 +265,13 @@ func zip_and_upload(fileCh chan UploadFile, request_url string, api_key string, 
 			relative_path := file_to_zip.TargetPath
 			f, err := w.Create(relative_path)
 			if err != nil {
-				logrus.Fatalf("Could not create the path %s in zip: %w", relative_path, err)
+				logrus.Fatalf("Could not create the path %s in zip: %v", relative_path, err)
 				return err
 			}
 
 			_, err = io.Copy(f, file)
 			if err != nil {
-				logrus.Fatalf("Could not add %s to the zip file: %w", file_to_zip.SourcePath, err)
+				logrus.Fatalf("Could not add %s to the zip file: %v", file_to_zip.SourcePath, err)
 				return err
 			}
 
