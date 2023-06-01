@@ -93,8 +93,9 @@ type DownloadFileProgress struct {
 }
 
 type DownloadZipFile struct {
-	ID    int  `json:"id"`
-	Ready bool `json:"ready"`
+	ID    int   `json:"id"`
+	Ready bool  `json:"ready"`
+	Size  int64 `json:"total_size"`
 }
 
 type DownloadProgress struct {
@@ -588,16 +589,16 @@ func downloadFiles(data DownloadData, conf config.Configurations, ws *websocket.
 	var datafile_ids__for_zip_download []int
 	for _, file := range data.Files {
 		if !advanced_download || file.Size/1024/1024 > directDownloadThresholdMb {
-			total_size += file.Size
 			file_progress = append(file_progress, DownloadFileProgress{Path: filepath.Join(file.TargetPath, file.Filename), Size: file.Size, Transferred: 0})
 			direct_downloads = append(direct_downloads, file)
 		} else if advanced_download {
 			datafile_ids__for_zip_download = append(datafile_ids__for_zip_download, file.ID)
 		}
+		total_size += file.Size
 	}
 
 	progress := DownloadProgress{
-		NrFiles:   len(direct_downloads),
+		NrFiles:   len(direct_downloads) + 1,
 		TotalSize: total_size,
 		Files:     file_progress,
 	}
@@ -624,12 +625,14 @@ func downloadFiles(data DownloadData, conf config.Configurations, ws *websocket.
 	// download zip file
 	if advanced_download && len(datafile_ids__for_zip_download) > 0 {
 		failed := false
+		logrus.Infof("Requesting zip file...")
 		download_file, err := requestZipFile(data.RequestData, datafile_ids__for_zip_download, conf)
 		if err != nil {
 			logrus.Error("zip download request failed: ", err)
 			failed = true
 		} else {
 			if !download_file.Ready {
+				logrus.Infof("Waiting for zip file...")
 				err = waitUntilReady(*download_file, conf)
 				if err != nil {
 					logrus.Error("poll of download file failed: ", err)
@@ -646,7 +649,7 @@ func downloadFiles(data DownloadData, conf config.Configurations, ws *websocket.
 			file.Close()
 
 			if !failed {
-				zip_download := DownloadFile{ID: download_file.ID, TargetPath: file.Name(), Filename: conf.General.BasePath, Hash: "zip_download"}
+				zip_download := DownloadFile{ID: download_file.ID, TargetPath: file.Name(), Filename: conf.General.BasePath, Hash: "zip_download", Size: download_file.Size}
 				fileCh <- zip_download
 			}
 
